@@ -201,23 +201,43 @@ Tools: ESLint + Prettier + Husky + lint-staged
 
 ### 사용자에게 묻기
 
-신중함을 강조하는 톤으로 묻는다. 한국어 모드 예시:
+**Step 1 소유 유형에 따라 톤을 분기.** 자체는 가벼운 톤, 외주는 계약 영향까지 명시.
 
-> 서비스 명칭을 무엇으로 할까요? **신중하게 결정해주세요.**
-> 이 이름은 폴더 경로명이 되고, GitHub repo · npm 패키지 · 도메인 이름과 연결됩니다.
-> 한 번 정해서 코드/문서/배포 인프라가 쌓이면 추후 변경에 품이 많이 듭니다 (특히 npm publish · 도메인 연결 이후).
->
+#### 자체 (own) — 가벼운 톤
+
+한국어 모드 예시:
+
+> 서비스 명칭을 무엇으로 할까요?
 > kebab-case 권장 (예: `travel-share`, `payment-admin`).
 > 비워두면 설명에서 추론한 1~3개 후보를 제시하겠습니다.
 
 영어 모드 예시:
 
-> What should the service name be? **Please choose carefully.**
-> This name becomes the folder path and will be tied to your GitHub repo, npm package, and domain.
-> Once code, docs, and deployment infra accumulate, renaming becomes costly (especially after npm publish or domain hookup).
->
+> What should the service name be?
 > kebab-case recommended (e.g. `travel-share`, `payment-admin`).
-> Leave blank and I'll propose 1–3 candidates from your description.
+> Leave blank and I'll propose 1–3 candidates from the description.
+
+#### 외주 (client) — 계약 영향 명시
+
+한국어 모드 예시:
+
+> 서비스 명칭을 무엇으로 할까요? **신중하게 결정해주세요.**
+> 이 이름은 폴더 경로명이 되고, GitHub repo · npm 패키지 · 도메인 이름과 연결됩니다.
+>
+> **추후 변경 시 별도의 개발 비용이 청구되며(확정), 데드라인이 연장될 수 있습니다.**
+>
+> kebab-case 권장 (예: `acme-platform`, `client-admin`).
+> 비워두면 설명에서 추론한 1~3개 후보를 제시하겠습니다.
+
+영어 모드 예시:
+
+> What should the service name be? **Please choose carefully.**
+> This name becomes the folder path and will be tied to the GitHub repo, npm package, and domain.
+>
+> **Renaming later will incur additional development charges (confirmed) and may extend the deadline.**
+>
+> kebab-case recommended (e.g. `acme-platform`, `client-admin`).
+> Leave blank and I'll propose 1–3 candidates from the description.
 
 ### 추론 후보 생성 방식
 
@@ -275,14 +295,17 @@ gh repo view <username>/<프로젝트명>
 | 랜딩/마케팅 | 회사명+site/landing | `acme-site` |
 | 라이브러리 | 언어/프레임워크 prefix+기능 | `ts-utils`, `react-form` |
 
-### 변경 비용 (사전 안내)
+### 변경 비용 (내부 참고 — Claude용)
 
+기술적 변경 난이도:
 - 폴더 rename: **쉬움** (OS 이동 또는 `git mv`)
 - GitHub repo rename: **쉬움** (`gh repo rename`, 자동 redirect 제공)
 - npm 패키지 published 후 rename: **어려움** (deprecate + 새 패키지 publish)
 - 도메인 연결 후 변경: **어려움**
 
-→ npm publish 또는 도메인 연결 전 단계라면 변경 자유. 그 이후엔 신중.
+자체 프로젝트: npm publish 또는 도메인 연결 전 단계라면 변경 자유. 그 이후엔 신중.
+
+외주 프로젝트: 위 기술 비용과 **별개로 계약상 추가 개발비 청구 + 데드라인 연장** 발생. 클라이언트와 사전 협의 필수 (위 사용자 안내 메시지에 이미 명시됨).
 
 ### 저장 경로 확정
 
