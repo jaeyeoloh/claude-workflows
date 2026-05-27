@@ -10,6 +10,36 @@
 - **Step 0에서 결정된 언어**가 이후 모든 단계의 질문, 옵션 라벨, 생성 파일(PRD.md, CLAUDE.md, workflow-log.md, README.md 등)의 언어를 결정한다.
 - skill.md 파일 자체는 한국어로 유지 — 사용자에게 안 보이는 Claude용 지시문. 영어 모드와 무관.
 - 사용자가 이미 답한 정보, 또는 **Step 2 참고 자료에서 추론 가능한 정보**는 해당 step에서 다시 묻지 않는다. 누락된 항목만 진행.
+- 경로 표현은 **모두 `<workspace>` 플레이스홀더 기준**. 실제 경로는 아래 워크스페이스 감지 결과로 치환. 절대경로 하드코딩 금지.
+
+---
+
+## 워크스페이스 감지 / Workspace Detection
+
+**Step 0 실행 전, 사용자에게 묻기 전에 먼저 수행한다.** 사용자 인터랙션 없음.
+
+### 감지 절차
+
+1. 현재 cwd부터 시작해 부모 폴더로 올라가며 다음 패턴을 찾는다:
+   - 어떤 폴더 X에 `own/`, `outsourcing/`, `shared/`, `claude-workflows/` 중 **2개 이상**이 직속 하위로 존재하면 X를 **워크스페이스 루트** 로 간주.
+2. 감지 성공 시 그 경로를 `<workspace>`로 저장하고 이후 모든 경로에서 사용.
+3. 감지 실패(루트까지 올라가도 패턴 없음) 시 사용자에게 한 번 묻기:
+
+   > 워크스페이스 구조를 감지하지 못했습니다. `own/`, `outsourcing/`, `shared/`, `claude-workflows/` 폴더들이 위치한 부모 디렉토리 경로를 알려주세요. (없으면 "구조 없음")
+
+4. 사용자가 "구조 없음"으로 답하면 단순 모드로 전환: 현재 cwd를 `<workspace>`로 가정하고 own/outsourcing 분기 없이 `<workspace>/<프로젝트명>/`에 생성.
+
+### 이 패턴이 전제하는 폴더 구조
+
+```
+<workspace>/
+├── own/              # 자체 프로젝트
+├── outsourcing/      # 외주 프로젝트
+├── shared/           # 공유 코드 패키지
+└── claude-workflows/ # 슬래시 커맨드 라이브러리
+```
+
+전체 패턴 미구축 팀원은 `claude-workflows/README.md`의 워크스페이스 셋업 가이드 참조.
 
 ---
 
@@ -29,8 +59,8 @@
 
 | 구분 | 차이점 | 저장 위치 |
 |---|---|---|
-| 자체 (own) | 의사결정 자유도 높음. travelmate 검증 스택을 anchor로 제시 가능. workflow-log 자유 형식. | `projects/own/<프로젝트명>/` |
-| 외주 (client) | 클라이언트 요구사항/명세 우선. 워크플로우-log를 청구/검토 근거로 활용 가능하게 더 정밀하게 기록. | `projects/outsourcing/<클라이언트>/<프로젝트명>/` |
+| 자체 (own) | 의사결정 자유도 높음. travelmate 검증 스택을 anchor로 제시 가능. workflow-log 자유 형식. | `<workspace>/own/<프로젝트명>/` |
+| 외주 (client) | 클라이언트 요구사항/명세 우선. 워크플로우-log를 청구/검토 근거로 활용 가능하게 더 정밀하게 기록. | `<workspace>/outsourcing/<클라이언트>/<프로젝트명>/` |
 
 ---
 
@@ -191,7 +221,9 @@ Tools: ESLint + Prettier + Husky + lint-staged
 
 ### shared/ 우선 스캔 (필수)
 
-스택 결정 전 `C:\Users\vhxj3\Desktop\projects\shared\packages\`를 먼저 스캔. 이미 만들어진 모듈(카카오 OAuth, 토스, 한국 도메인 유틸 등)이 있으면 **그것을 import해서 쓴다는 전제로 셋업**. 새로 짜지 말 것. (전역 CLAUDE.md 공유 모듈 규칙 참조)
+스택 결정 전 `<workspace>/shared/packages/`를 먼저 스캔. 이미 만들어진 모듈(카카오 OAuth, 토스, 한국 도메인 유틸 등)이 있으면 **그것을 import해서 쓴다는 전제로 셋업**. 새로 짜지 말 것. (전역 CLAUDE.md 공유 모듈 규칙 참조)
+
+워크스페이스에 `shared/` 폴더가 아예 없으면 이 단계 스킵.
 
 ---
 
@@ -309,8 +341,9 @@ gh repo view <username>/<프로젝트명>
 
 ### 저장 경로 확정
 
-- 자체: `projects/own/<프로젝트명>/`
-- 외주: `projects/outsourcing/<클라이언트>/<프로젝트명>/`
+- 자체: `<workspace>/own/<프로젝트명>/`
+- 외주: `<workspace>/outsourcing/<클라이언트>/<프로젝트명>/`
+- 워크스페이스 감지 실패한 단순 모드: `<workspace>/<프로젝트명>/`
 
 ---
 
@@ -359,6 +392,6 @@ Step 7에서 확정한 경로에 폴더 생성 후 아래 파일을 선택된 �
 
 프로젝트 생성 후 사용자에게 안내:
 
-- `claude-workflows/commands/` 라이브러리에서 필요한 커맨드를 새 프로젝트의 `.claude/commands/`로 **수동 복사** 권유. 글로벌 자동 설치는 사용하지 않는다 (사용자 정책).
-- `shared/` 패키지 사용 시 `package.json`에 git dependency 또는 npm install로 연결.
+- `<workspace>/claude-workflows/commands/` 라이브러리에서 필요한 커맨드를 새 프로젝트의 `.claude/commands/`로 **수동 복사** 권유. 글로벌 자동 설치는 사용하지 않는다 (사용자 정책).
+- `<workspace>/shared/` 패키지 사용 시 `package.json`에 git dependency 또는 npm install로 연결.
 - 첫 GitHub 원격 연결 원하면 `gh repo create` 단계 별도 진행.
