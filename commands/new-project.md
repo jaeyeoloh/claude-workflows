@@ -248,7 +248,7 @@ Tools: ESLint + Prettier + Husky + lint-staged
 **한국 타겟:**
 - 인증: 카카오 OAuth (필수 검토), 네이버, Apple
 - 결제: 토스페이먼츠 또는 PortOne
-- SMS: CoolSMS / NHN Cloud
+- SMS: **SolAPI** (사용자 친숙, 1순위). 대안 — NHN Cloud SMS. (SolAPI ≈ 구 CoolSMS의 차세대 플랫폼, 동일 회사 NURIGO)
 - 도메인 유틸: 사업자번호 / 주민번호 / 한국 휴대폰 포맷, 원화 표기
 
 **글로벌 타겟:**
