@@ -35,10 +35,13 @@
 
 ### 감지 절차
 
-1. 현재 cwd부터 시작해 부모 폴더로 올라가며 다음 패턴을 찾는다:
+1. **양방향 탐색**으로 패턴 찾기:
+   - **상향**: 현재 cwd부터 부모 폴더로 올라가며 검사
+   - **하향**: cwd 자체의 직속 하위도 검사 (cwd가 워크스페이스의 부모일 수 있음 — 예: Desktop에서 실행, `projects/`가 자식)
    - 어떤 폴더 X에 `own/`, `outsourcing/`, `shared/`, `claude-workflows/` 중 **2개 이상**이 직속 하위로 존재하면 X를 **워크스페이스 루트** 로 간주.
+   - 둘 다 매치되면 cwd에 더 가까운 쪽 채택 (상향이 일반적으로 우선).
 2. 감지 성공 시 그 경로를 `<workspace>`로 저장하고 이후 모든 경로에서 사용.
-3. 감지 실패(루트까지 올라가도 패턴 없음) 시 사용자에게 한 번 묻기:
+3. 감지 실패(상향·하향 모두 실패) 시 사용자에게 한 번 묻기:
 
    > 워크스페이스 구조를 감지하지 못했습니다. `own/`, `outsourcing/`, `shared/`, `claude-workflows/` 폴더들이 위치한 부모 디렉토리 경로를 알려주세요. (없으면 "구조 없음")
 
@@ -77,6 +80,22 @@
 | 자체 (own) | 의사결정 자유도 높음. travelmate 검증 스택을 anchor로 제시 가능. workflow-log 자유 형식. | `<workspace>/own/<프로젝트명>/` |
 | 외주 (client) | 클라이언트 요구사항/명세 우선. 워크플로우-log를 청구/검토 근거로 활용 가능하게 더 정밀하게 기록. | `<workspace>/outsourcing/<클라이언트>/<프로젝트명>/` |
 
+### 외주 선택 시 — 클라이언트 이름 즉시 확인 (필수)
+
+외주(client)로 선택했으면 다음을 추가로 묻고 `<클라이언트>` 변수에 저장. 이 값은 Step 7 저장 경로 확정에 필수.
+
+한국어 모드:
+
+> 어느 클라이언트인가요? (kebab-case 또는 회사 영문명 짧게, 예: `acme-corp`, `xyz-startup`)
+> 폴더 경로 `<workspace>/outsourcing/<클라이언트>/...`의 일부로 사용됩니다.
+
+영어 모드:
+
+> Which client is this for? (kebab-case or short English company name, e.g. `acme-corp`, `xyz-startup`)
+> Used as part of the folder path `<workspace>/outsourcing/<client>/...`.
+
+답을 `<클라이언트>` placeholder에 보존. 이후 step에서 경로 표현 시 사용.
+
 ---
 
 ## Step 2 — 참고 자료 확인 / Reference Material Check
@@ -107,12 +126,17 @@
 
 - 텍스트: `.md`, `.txt`
 - 문서: `.pdf` (큰 파일은 `pages` 옵션으로 분할), `.docx`
-- 슬라이드: `.pptx` 또는 `.pdf` 변환본
+- 슬라이드: **`.pdf` 변환본 권장.** `.pptx`는 Read 도구로 직접 파싱 불가 — 사용자에게 "PowerPoint에서 PDF로 export해서 다시 제공해주세요" 요청.
 - 스프레드시트: `.xlsx`, `.csv` (기능 목록 · 사용자 페르소나 등 정형 데이터)
 - 이미지: `.png`, `.jpg`, `.jpeg` (와이어프레임 · 화면 설계 — 시각 분석)
 - 데이터: `.json`, `.yaml`
 
-폴더 경로 받으면 `Glob`으로 재귀 탐색해 후보 파일 전부 식별.
+폴더 경로 받으면 `Glob`으로 재귀 탐색해 후보 파일 식별. **30개 초과 시 사용자에게 범위 좁히기 요청:**
+
+> 후보 파일이 N개 발견됐습니다 (30개 초과). 범위를 좁힐 수 있나요?
+> - 특정 하위 폴더만 지정
+> - 키워드 필터 (예: `.md`만, 또는 'spec'/'PRD'/'요구사항' 포함만)
+> - 그대로 "전부 진행" 답하면 진행 (토큰 비용·지연 발생 가능)
 
 ### 자동 추출 대상
 
@@ -318,18 +342,26 @@ Step 2 자료 또는 Step 3 설명에서 핵심 명사 1~2개를 추출해 조�
 - 의미 번역(translation) 권장 — "트래블메이트" → `travel-mate` 또는 `travel-share`
 - 한국어 의미를 짧고 명확한 영문 단어로 압축
 
-### GitHub repo 이름 일치 권장
+### GitHub repo 이름 일치 + 충돌 체크 (필수)
 
-**폴더명 = GitHub repo 이름**으로 통일하면 깔끔. 다르면 나중에 혼란:
+**폴더명 = GitHub repo 이름**으로 통일. 다르면 나중에 혼란:
 - 예: 이전 travelmate 케이스 (폴더 `travelmate` ↔ repo `travel-share`) — "어떤 이름이 진짜?" 혼동
 
-폴더명 확정 전 GitHub에 같은 이름의 repo가 본인 계정에 이미 있는지 확인:
+**이름 확정 직전 GitHub 충돌 체크를 강제 수행** (Step 8의 자동 push가 같은 이름 존재 시 실패함 — 미리 막기):
 
 ```powershell
-gh repo view <username>/<프로젝트명>
+gh repo view <프로젝트명> 2>$null
+if ($LASTEXITCODE -eq 0) { Write-Output "EXISTS" } else { Write-Output "AVAILABLE" }
 ```
 
-있으면 다른 이름 권유 또는 사용자가 의식적으로 선택하게 안내.
+- **AVAILABLE**: 이름 확정 → Step 8 진행.
+- **EXISTS**: 사용자에게 알리고 결정 받기:
+  > GitHub에 이미 같은 이름의 repo가 존재합니다 (`gh repo view <프로젝트명>`).
+  > - 다른 이름 사용 (다른 후보 제시)
+  > - 기존 repo 재사용 의도라면 `/new-project --no-remote`로 재실행 권장 (로컬만 셋업, 수동 push)
+  > - 강제 진행 (Step 8 자동 push는 실패하지만 로컬 셋업은 유지됨)
+
+**`--no-remote` 플래그 있으면 이 체크 스킵** (어차피 GitHub 안 만듦).
 
 ### 서비스 유형별 네이밍 패턴 (참고)
 
@@ -367,24 +399,49 @@ gh repo view <username>/<프로젝트명>
 Step 7에서 확정한 경로에 폴더 생성 후 아래 파일을 선택된 언어로 작성:
 
 1. `docs/PRD.md` — 한 줄 정의, 해결 문제, 타겟 유저, Wave 1/2 기능, 비기능 요구사항, Out of Scope, 성공 지표, 미결사항. **Step 2 자료에서 추출한 정보 최대한 반영.**
-2. `docs/workflow-log.md` — `## [DEC-001] 결정 주제` 형식. 컨텍스트 / 선택지 / 선택 / 추천 근거 / 트레이드오프 / 시점. **Step 1~7 진행 중 발생한 결정을 DEC-001부터 자동 기록.**
+2. `docs/workflow-log.md` — `## [DEC-001] 결정 주제` 형식. 컨텍스트 / 선택지 / 선택 / 추천 근거 / 트레이드오프 / 시점.
+
+   **백필 의무 — Step 1~7 진행 중 결정을 명시적으로 백필:**
+   - **DEC-001**: 소유 유형 결정 (Step 1 — 자체/외주, 외주면 클라이언트명 포함)
+   - **DEC-002**: 기술 스택 결정 (Step 6 — anchor 채택 / 항목별 커스텀 내역)
+   - **DEC-003**: 프로젝트명 결정 (Step 7 — 후보 중 선택 근거 + GitHub 충돌 체크 결과)
+   - 그 외 Step 진행 중 발생한 추가 결정(예: 외주 + 클라이언트 특수 요구 반영)이 있으면 DEC-004부터 순차 기록.
 3. `CLAUDE.md` — 프로젝트 컨텍스트, 스택 요약, workflow-log 참조, 프로액티브 제안 규칙
 4. `README.md` — 한 줄 정의 + 빠른 시작 + 배포 정보
 5. `docs/git-strategy.md` — main / dev / feature/* / fix/* 전략 (1인이라도 표준 유지)
-6. `.gitignore` — 기본 + `.env*` + `.claude/settings.local.json` + `.claude/scheduled_tasks.lock`
+6. `.gitignore` — Step 6 스택 결정에 따라 조립:
+   - **항상**: `.env*`, `.claude/settings.local.json`, `.claude/scheduled_tasks.lock`, `*.log`, `.DS_Store`, `Thumbs.db`
+   - **Node.js 계열 (대부분 자체)**: `node_modules/`, `dist/`, `build/`, `*.tsbuildinfo`
+   - **Turborepo**: `.turbo/`
+   - **Next.js**: `.next/`, `out/`
+   - **Vite**: `dist/`, `dist-ssr/`, `*.local`
+   - **Python**: `__pycache__/`, `*.pyc`, `.venv/`, `*.egg-info/`
+   - **iOS/Android (Capacitor)**: `ios/`, `android/` (래핑 전이면 nested capacitor build 산출물 한정)
 
-그 다음 git init (기본 브랜치 `main`), 첫 커밋. **GitHub 원격 연결은 기본값으로 자동 수행** — 아래 절차:
+그 다음 git init (기본 브랜치 `main`), 첫 커밋:
+
+```powershell
+git init -b main
+git add .
+git commit -m "chore: initial project scaffold
+
+Generated via /new-project skill.
+Stack: <Step 6 stack summary 한 줄>
+Files: PRD, workflow-log (DEC-001~003 backfilled), CLAUDE.md, README, git-strategy, .gitignore"
+```
+
+**GitHub 원격 연결은 기본값으로 자동 수행** — 아래 절차:
 
 ### GitHub 자동 연결 (default ON)
 
-`--no-remote` 플래그 없으면 다음 실행:
+`--no-remote` 플래그 없으면 다음 실행 (Step 7에서 충돌 체크 통과 가정):
 
 ```powershell
-gh repo create <owner>/<프로젝트명> --private --source=. --push --description "<PRD 한 줄 정의>"
+gh repo create <프로젝트명> --private --source=. --push --description "<PRD 한 줄 정의>"
 ```
 
 - **Visibility**: 자체/외주 모두 **private** 기본. `--public` 플래그 있으면 public.
-- **Owner**: `gh api user --jq .login` 으로 현재 로그인 계정.
+- **Owner**: gh CLI 로그인 계정 default (별도 명시 불필요).
 - **Description**: PRD.md의 한 줄 정의 추출 (없으면 폴더명).
 - **Repo name**: 폴더명과 동일 (Step 7 결정).
 
@@ -424,7 +481,9 @@ GitHub 연결 자체 스킵 + 안내:
 
 ## Step 10 — 구현 시작 / Implementation
 
-순서:
+**프로젝트 유형(Step 4)에 따라 순서 분기.**
+
+### 웹앱 / SaaS / 플랫폼 / 커뮤니티 / 내부도구 (default)
 
 1. 모노레포 또는 단일 프로젝트 셋업 (Step 6 결정에 따라)
 2. DB 스키마 → 마이그레이션
@@ -432,7 +491,23 @@ GitHub 연결 자체 스킵 + 안내:
 4. 핵심 기능 (Wave 1 우선순위 순)
 5. CI/CD (자체면 GitHub Actions + Vercel/Railway 기본, 외주면 클라이언트 인프라)
 
-각 단계에서 의사결정 발생 시 `docs/workflow-log.md`에 `DEC-NNN` 추가.
+### 정적 사이트 / 랜딩 / 마케팅
+
+1. 페이지 구조 + 라우팅
+2. 콘텐츠 + 스타일링 (Tailwind 등)
+3. SEO 메타 + Open Graph + sitemap
+4. 배포 (Vercel / Netlify / GitHub Pages)
+
+### CLI / 라이브러리
+
+1. 핵심 모듈 public API 인터페이스 정의 (타입 먼저)
+2. 구현 + 단위 테스트 (TDD 적합)
+3. 문서 (README + 사용 예시 + API reference)
+4. npm publish 준비 (`package.json` exports, README badge, license)
+
+---
+
+각 단계에서 의사결정 발생 시 `docs/workflow-log.md`에 `DEC-NNN` 추가 (DEC-001~003 백필 이후부터 순차).
 
 ---
 
