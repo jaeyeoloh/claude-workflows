@@ -12,6 +12,21 @@
 - 사용자가 이미 답한 정보, 또는 **Step 2 참고 자료에서 추론 가능한 정보**는 해당 step에서 다시 묻지 않는다. 누락된 항목만 진행.
 - 경로 표현은 **모두 `<workspace>` 플레이스홀더 기준**. 실제 경로는 아래 워크스페이스 감지 결과로 치환. 절대경로 하드코딩 금지.
 
+### 지원 플래그 ($ARGUMENTS에서 파싱)
+
+| 플래그 | 효과 | 기본값 |
+|---|---|---|
+| `--no-remote` | GitHub 자동 생성/push 스킵 (로컬 git만) | off (= 자동 push) |
+| `--public` | GitHub repo public으로 생성 | off (= private) |
+
+플래그 외 텍스트는 Step 3 프로젝트 설명으로 활용.
+
+예시:
+- `/new-project` → 기본값, 모든 step 인터랙티브, private repo 자동 생성
+- `/new-project --no-remote` → 로컬만 생성, GitHub 건너뜀
+- `/new-project --public` → public repo 자동 생성
+- `/new-project 여행 동행 플랫폼` → Step 3 설명 미리 전달
+
 ---
 
 ## 워크스페이스 감지 / Workspace Detection
@@ -358,7 +373,40 @@ Step 7에서 확정한 경로에 폴더 생성 후 아래 파일을 선택된 �
 5. `docs/git-strategy.md` — main / dev / feature/* / fix/* 전략 (1인이라도 표준 유지)
 6. `.gitignore` — 기본 + `.env*` + `.claude/settings.local.json` + `.claude/scheduled_tasks.lock`
 
-그 다음 git init (기본 브랜치 `main`), 첫 커밋. GitHub 원격 연결은 사용자가 명시적으로 요청할 때까지 보류 (gh repo create는 별도 단계).
+그 다음 git init (기본 브랜치 `main`), 첫 커밋. **GitHub 원격 연결은 기본값으로 자동 수행** — 아래 절차:
+
+### GitHub 자동 연결 (default ON)
+
+`--no-remote` 플래그 없으면 다음 실행:
+
+```powershell
+gh repo create <owner>/<프로젝트명> --private --source=. --push --description "<PRD 한 줄 정의>"
+```
+
+- **Visibility**: 자체/외주 모두 **private** 기본. `--public` 플래그 있으면 public.
+- **Owner**: `gh api user --jq .login` 으로 현재 로그인 계정.
+- **Description**: PRD.md의 한 줄 정의 추출 (없으면 폴더명).
+- **Repo name**: 폴더명과 동일 (Step 7 결정).
+
+### gh CLI 미설치 / 미로그인 시
+
+스킵하고 안내:
+> gh CLI가 설치/로그인되어 있지 않아 GitHub 자동 연결을 건너뜁니다.
+> 나중에 수동으로: `gh repo create <owner>/<프로젝트명> --private --source=. --push`
+
+### --no-remote 플래그 시
+
+GitHub 연결 자체 스킵 + 안내:
+> --no-remote: GitHub 원격 연결을 건너뜁니다. 로컬 git만 셋업됨.
+
+### 동일 이름 repo 이미 존재 시
+
+자동 연결 실패. 안내:
+> 자동 연결 실패: <owner>/<프로젝트명>이 이미 존재합니다. Step 7로 돌아가 다른 이름을 선택하거나 수동 처리해주세요.
+
+### 성공 시 결과 표시
+
+> GitHub repo 생성 + 첫 push 완료: https://github.com/<owner>/<프로젝트명> (private)
 
 ---
 
@@ -394,4 +442,5 @@ Step 7에서 확정한 경로에 폴더 생성 후 아래 파일을 선택된 �
 
 - `<workspace>/claude-workflows/commands/` 라이브러리에서 필요한 커맨드를 새 프로젝트의 `.claude/commands/`로 **수동 복사** 권유. 글로벌 자동 설치는 사용하지 않는다 (사용자 정책).
 - `<workspace>/shared/` 패키지 사용 시 `package.json`에 git dependency 또는 npm install로 연결.
-- 첫 GitHub 원격 연결 원하면 `gh repo create` 단계 별도 진행.
+- GitHub repo는 Step 8에서 자동 연결됨 (별도 안내 불필요). 후속 작업(Vercel/Railway 연결, 도메인 설정 등)은 명시적 요청 시 별도 진행.
+- **Public 쇼케이스(landing 페이지)**: 추후 코드 1차 완료된 시점에 필요하면 별도 커맨드(예: `/publish-showcase`)로 처리 예정. 지금은 미구현.
